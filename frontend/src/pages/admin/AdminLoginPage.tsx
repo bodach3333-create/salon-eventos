@@ -24,16 +24,16 @@ export function AdminLoginPage() {
     formState: { errors },
   } = useForm<FormData>({ resolver: zodResolver(schema) })
 
-  const mutation = useMutation({
-    mutationFn: adminApi.login,
-    onSuccess: ({ token }) => {
-      login(token)
-      navigate('/admin/dashboard')
-    },
-    onError: () => {
-      setError('password', { message: 'Contraseña incorrecta' })
-    },
-  })
+const mutation = useMutation({
+  mutationFn: adminApi.login,
+  onSuccess: ({ token }) => {
+    login(token)
+    window.location.href = '/admin/dashboard'
+  },
+  onError: () => {
+    setError('password', { message: 'Contraseña incorrecta' })
+  },
+})
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
