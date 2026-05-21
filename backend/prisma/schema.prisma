@@ -1,0 +1,183 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Configuración del negocio ─────────────────────────────────────────────────
+
+model BusinessConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Slots (turnos globales) ───────────────────────────────────────────────────
+
+model Slot {
+  id        String   @id @default(cuid())
+  label     String   // "Turno Mañana"
+  startTime String   // "10:00"
+  endTime   String   // "14:00"
+  isActive  Boolean  @default(true)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Días de la semana habilitados para este slot (0=Dom, 6=Sab)
+  enabledDays Int[] @default([])
+
+  reservations Reservation[]
+  blocks       DateBlock[]
+
+  @@map("slots")
+}
+
+// ─── Bloqueos de fecha/slot ────────────────────────────────────────────────────
+
+model DateBlock {
+  id        String   @id @default(cuid())
+  date      String   // "2024-03-15"
+  slotId    String?  // null = bloqueo de día completo
+  slot      Slot?    @relation(fields: [slotId], references: [id])
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([date, slotId])
+  @@map("date_blocks")
+}
+
+// ─── Catering ─────────────────────────────────────────────────────────────────
+
+model CateringPackage {
+  id             String   @id @default(cuid())
+  name           String   // "Básico", "Clásico", "Premium"
+  description    String   @default("")
+  pricePerPerson Decimal  @db.Decimal(10, 2)
+  type           CateringType
+  isActive       Boolean  @default(true)
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("catering_packages")
+}
+
+enum CateringType {
+  CHILDREN
+  ADULTS
+}
+
+// ─── Bebidas ──────────────────────────────────────────────────────────────────
+
+model DrinksOption {
+  id            String   @id @default(cuid())
+  name          String   // "Sin alcohol", "Con alcohol"
+  description   String   @default("")
+  pricePerPerson Decimal @db.Decimal(10, 2)
+  isActive      Boolean  @default(true)
+  order         Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("drinks_options")
+}
+
+// ─── Tortas ───────────────────────────────────────────────────────────────────
+
+model CakeOption {
+  id          String   @id @default(cuid())
+  name        String   // "Pequeña (10 porciones)"
+  description String   @default("")
+  price       Decimal  @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("cake_options")
+}
+
+// ─── Extras ───────────────────────────────────────────────────────────────────
+
+model ExtraItem {
+  id          String   @id @default(cuid())
+  name        String   // "Mago", "Pinta caritas"
+  description String   @default("")
+  price       Decimal  @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reservationExtras ReservationExtra[]
+
+  @@map("extra_items")
+}
+
+// ─── Reservas ─────────────────────────────────────────────────────────────────
+
+model Reservation {
+  id       String @id @default(cuid())
+
+  // Datos del cliente
+  clientName  String
+  clientPhone String
+  eventType   String
+
+  // Evento
+  date   String // "2024-03-15"
+  slotId String
+  slot   Slot   @relation(fields: [slotId], references: [id])
+
+  // Asistentes
+  childrenCount Int
+  adultCount    Int
+
+  // Servicios seleccionados (IDs)
+  cateringChildrenPackageId String?
+  cateringAdultsPackageId   String?
+  drinksOptionId            String?
+  cakeOptionId              String?
+
+  // Extras (muchos a muchos)
+  extras ReservationExtra[]
+
+  // Snapshot de precios (JSON)
+  pricingSnapshot Json
+
+  // Estado
+  status    ReservationStatus @default(PENDING)
+  holdUntil DateTime?         // Para expiración de HOLD
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date, slotId])
+  @@index([status])
+  @@map("reservations")
+}
+
+model ReservationExtra {
+  reservationId String
+  extraItemId   String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  extra         ExtraItem   @relation(fields: [extraItemId], references: [id])
+
+  @@id([reservationId, extraItemId])
+  @@map("reservation_extras")
+}
+
+enum ReservationStatus {
+  PENDING
+  HOLD
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
