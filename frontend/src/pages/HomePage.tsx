@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Calendar, Check, Phone, Star } from 'lucide-react'
+import { Calendar, Phone, Star } from 'lucide-react'
 
 const features = [
   { emoji: '🎂', title: 'Catering personalizado', desc: 'Paquetes para niños y adultos' },
