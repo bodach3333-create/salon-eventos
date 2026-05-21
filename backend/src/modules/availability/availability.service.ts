@@ -1,5 +1,4 @@
 import { prisma } from '../../lib/prisma'
-import { getDaysInMonth, format, parseISO } from 'date-fns'
 
 export type SlotStatus = 'available' | 'pending' | 'reserved' | 'blocked' | 'closed'
 
@@ -15,29 +14,31 @@ export interface DayAvailability {
   slots: SlotAvailability[]
 }
 
-export async function getMonthAvailability(
-  year: number,
-  month: number, // 1-based
-): Promise<DayAvailability[]> {
-  const daysInMonth = getDaysInMonth(new Date(year, month - 1))
+function getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate()
+}
+
+function getDayOfWeek(dateStr: string): number {
+  return new Date(dateStr + 'T12:00:00').getDay()
+}
+
+function padDate(year: number, month: number, day: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+export async function getMonthAvailability(year: number, month: number): Promise<DayAvailability[]> {
+  const daysInMonth = getDaysInMonth(year, month)
   const dates: string[] = []
-
   for (let d = 1; d <= daysInMonth; d++) {
-    dates.push(format(new Date(year, month - 1, d), 'yyyy-MM-dd'))
+    dates.push(padDate(year, month, d))
   }
-
   return Promise.all(dates.map((date) => getDayAvailability(date)))
 }
 
 export async function getDayAvailability(date: string): Promise<DayAvailability> {
-  const dayOfWeek = parseISO(date).getDay() // 0=Sun, 6=Sat
-
-  // Obtener todos los slots activos para este día de la semana
+  const dayOfWeek = getDayOfWeek(date)
   const slots = await prisma.slot.findMany({
-    where: {
-      isActive: true,
-      enabledDays: { has: dayOfWeek },
-    },
+    where: { isActive: true, enabledDays: { has: dayOfWeek } },
     orderBy: { order: 'asc' },
   })
 
@@ -45,47 +46,29 @@ export async function getDayAvailability(date: string): Promise<DayAvailability>
     return { date, isDayOpen: false, slots: [] }
   }
 
-  // Cargar bloqueos y reservas en paralelo
   const [blocks, reservations] = await Promise.all([
-    prisma.dateBlock.findMany({
-      where: { date },
-    }),
+    prisma.dateBlock.findMany({ where: { date } }),
     prisma.reservation.findMany({
-      where: {
-        date,
-        status: { in: ['HOLD', 'CONFIRMED', 'PENDING'] },
-      },
+      where: { date, status: { in: ['HOLD', 'CONFIRMED', 'PENDING'] } },
       select: { slotId: true, status: true },
     }),
   ])
 
-  // Bloqueo de día completo
   const isDayBlocked = blocks.some((b) => b.slotId === null)
   if (isDayBlocked) {
     return { date, isDayOpen: false, slots: [] }
   }
 
   const slotAvailabilities: SlotAvailability[] = slots.map((slot) => {
-    // Bloqueo específico del slot
     const isSlotBlocked = blocks.some((b) => b.slotId === slot.id)
-    if (isSlotBlocked) {
-      return { slotId: slot.id, slot, status: 'blocked' }
-    }
-
-    // Reserva existente
+    if (isSlotBlocked) return { slotId: slot.id, slot, status: 'blocked' }
     const reservation = reservations.find((r) => r.slotId === slot.id)
     if (reservation) {
       if (reservation.status === 'CONFIRMED') return { slotId: slot.id, slot, status: 'reserved' }
-      if (reservation.status === 'HOLD') return { slotId: slot.id, slot, status: 'pending' }
-      if (reservation.status === 'PENDING') return { slotId: slot.id, slot, status: 'pending' }
+      return { slotId: slot.id, slot, status: 'pending' }
     }
-
     return { slotId: slot.id, slot, status: 'available' }
   })
 
-  return {
-    date,
-    isDayOpen: true,
-    slots: slotAvailabilities,
-  }
+  return { date, isDayOpen: true, slots: slotAvailabilities }
 }
