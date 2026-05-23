@@ -27,7 +27,11 @@ catalogAdminRouter.put('/catering/:id', requireAdmin, async (req, res) => {
 })
 
 catalogAdminRouter.delete('/catering/:id', requireAdmin, async (req, res) => {
-  await prisma.cateringPackage.delete({ where: { id: req.params.id } })
+  // Soft delete: marcar como inactivo para no romper reservas existentes
+  await prisma.cateringPackage.update({
+    where: { id: req.params.id },
+    data: { isActive: false },
+  })
   res.json({ data: { deleted: true } })
 })
 
@@ -52,7 +56,10 @@ catalogAdminRouter.put('/drinks/:id', requireAdmin, async (req, res) => {
 })
 
 catalogAdminRouter.delete('/drinks/:id', requireAdmin, async (req, res) => {
-  await prisma.drinksOption.delete({ where: { id: req.params.id } })
+  await prisma.drinksOption.update({
+    where: { id: req.params.id },
+    data: { isActive: false },
+  })
   res.json({ data: { deleted: true } })
 })
 
@@ -77,7 +84,10 @@ catalogAdminRouter.put('/cakes/:id', requireAdmin, async (req, res) => {
 })
 
 catalogAdminRouter.delete('/cakes/:id', requireAdmin, async (req, res) => {
-  await prisma.cakeOption.delete({ where: { id: req.params.id } })
+  await prisma.cakeOption.update({
+    where: { id: req.params.id },
+    data: { isActive: false },
+  })
   res.json({ data: { deleted: true } })
 })
 
@@ -102,6 +112,9 @@ catalogAdminRouter.put('/extras/:id', requireAdmin, async (req, res) => {
 })
 
 catalogAdminRouter.delete('/extras/:id', requireAdmin, async (req, res) => {
-  await prisma.extraItem.delete({ where: { id: req.params.id } })
+  await prisma.extraItem.update({
+    where: { id: req.params.id },
+    data: { isActive: false },
+  })
   res.json({ data: { deleted: true } })
 })
